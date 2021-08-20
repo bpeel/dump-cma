@@ -6,7 +6,6 @@ import curses
 import time
 
 
-CMA_POOL_SIZE = 316 * 1024 * 1024
 # Y position of where to draw the map
 MAP_Y = 1
 # Number of characters either side of the map
@@ -20,6 +19,9 @@ BUFFER_LIST_Y = TOTAL_Y + 2
 
 
 Buffer = namedtuple('Buffer', ['address', 'size'])
+
+
+cma_pool_size = 316 * 1024 * 1024
 
 
 def get_buffers():
@@ -39,8 +41,8 @@ def get_buffers():
 
 def draw_map_range(stdscr, start, size, fill):
     map_width = curses.COLS - MAP_PADDING * 2
-    start_pos = start * map_width // CMA_POOL_SIZE
-    end_pos = ((start + size) * map_width + CMA_POOL_SIZE - 1) // CMA_POOL_SIZE
+    start_pos = start * map_width // cma_pool_size
+    end_pos = ((start + size) * map_width + cma_pool_size - 1) // cma_pool_size
 
     line = ("#" if fill else " ") * (end_pos - start_pos)
 
@@ -50,7 +52,7 @@ def draw_map_range(stdscr, start, size, fill):
 
 def draw_map(stdscr, buffers):
     if len(buffers) <= 0:
-        draw_map_range(0, CMA_POOL_SIZE, false)
+        draw_map_range(0, cma_pool_size, false)
         return
 
     start_address = buffers[0].address
@@ -66,10 +68,10 @@ def draw_map(stdscr, buffers):
 
         last_address = buf.address + buf.size
 
-    if last_address < CMA_POOL_SIZE:
+    if last_address < cma_pool_size:
         draw_map_range(stdscr,
                        last_address,
-                       CMA_POOL_SIZE - last_address,
+                       cma_pool_size - last_address,
                        False)
 
 
@@ -86,7 +88,7 @@ def print_total(stdscr, buffers):
     stdscr.addstr(TOTAL_Y,
                   0,
                   "{} / {}".format(pretty_size(total_size),
-                                   pretty_size(CMA_POOL_SIZE)))
+                                   pretty_size(cma_pool_size)))
     stdscr.clrtoeol()
 
 
@@ -109,7 +111,23 @@ def list_buffers(stdscr, buffers):
         stdscr.clrtobot()
 
 
+def get_cma_pool_size():
+    regexp = re.compile(r'^CmaTotal: *([0-9]+) *kB')
+
+    with open("/proc/meminfo", 'rt') as f:
+        for line in f:
+            md = regexp.match(line)
+            if md is None:
+                continue
+
+            return int(md.group(1)) * 1024
+
+    return cma_pool_size
+
+
 def main(stdscr):
+    cma_pool_size = get_cma_pool_size()
+
     while True:
         buffers = list(get_buffers())
         buffers.sort(key = lambda b: b.address)
